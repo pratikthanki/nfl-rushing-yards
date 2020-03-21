@@ -309,11 +309,14 @@ def create_features(df, outcomes, deploy=False):
         return player_distance
 
     def defense_features(df):
-        rusher = df[df['NflId'] == df['NflIdRusher']][['GameId', 'PlayId', 'Team', 'X', 'Y']]
-        rusher.columns = ['GameId', 'PlayId', 'RusherTeam', 'RusherX', 'RusherY']
+        rusher = df[df['NflId'] == df['NflIdRusher']
+                    ][['GameId', 'PlayId', 'Team', 'X', 'Y']]
+        rusher.columns = ['GameId', 'PlayId',
+                          'RusherTeam', 'RusherX', 'RusherY']
 
         defense = pd.merge(df, rusher, on=['GameId', 'PlayId'], how='inner')
-        defense = defense[defense['Team'] != defense['RusherTeam_x']][['GameId', 'PlayId', 'X', 'Y', 'RusherX', 'RusherY']]
+        defense = defense[defense['Team'] != defense['RusherTeam_x']][[
+            'GameId', 'PlayId', 'X', 'Y', 'RusherX', 'RusherY']]
         defense['def_dist_to_back'] = defense[['X', 'Y', 'RusherX', 'RusherY']].apply(
             lambda x: euclidean_distance(x[0], x[1], x[2], x[3]), axis=1)
 
@@ -334,75 +337,9 @@ def create_features(df, outcomes, deploy=False):
             lambda x: 12*int(x.split('-')[0])+int(x.split('-')[1]))
 
         add_new_feas.append('PlayerHeight_dense')
-
-        # Time
-        df['TimeHandoff'] = df['TimeHandoff'].apply(
-            lambda x: datetime.datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ'))
-        df['TimeSnap'] = df['TimeSnap'].apply(
-            lambda x: datetime.datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ'))
-
-        df['TimeDelta'] = df.apply(lambda row: (
-            row['TimeHandoff'] - row['TimeSnap']).total_seconds(), axis=1)
-        df['PlayerBirthDate'] = df['PlayerBirthDate'].apply(
-            lambda x: datetime.datetime.strptime(x, '%m/%d/%Y'))
-
-        # Age
-        seconds_in_year = 60*60*24*365.25
-        df['PlayerAge'] = df.apply(lambda row: (
-            row['TimeHandoff']-row['PlayerBirthDate']).total_seconds()/seconds_in_year, axis=1)
         add_new_feas.append('PlayerAge')
-
-        # WindSpeed
-        df['WindSpeed_ob'] = df['WindSpeed'].apply(
-            lambda x: x.lower().replace('mph', '').strip() if not pd.isna(x) else x)
-        df['WindSpeed_ob'] = df['WindSpeed_ob'].apply(lambda x: (int(
-            x.split('-')[0])+int(x.split('-')[1]))/2 if not pd.isna(x) and '-' in x else x)
-        df['WindSpeed_ob'] = df['WindSpeed_ob'].apply(lambda x: (int(x.split(
-        )[0])+int(x.split()[-1]))/2 if not pd.isna(x) and type(x) != float and 'gusts up to' in x else x)
-        df['WindSpeed_dense'] = df['WindSpeed_ob'].apply(strtofloat)
         add_new_feas.append('WindSpeed_dense')
-
-        # Weather
-        df['GameWeather_process'] = df['GameWeather'].str.lower()
-        df['GameWeather_process'] = df['GameWeather_process'].apply(
-            lambda x: 'indoor' if not pd.isna(x) and 'indoor' in x else x)
-        df['GameWeather_process'] = df['GameWeather_process'].apply(lambda x: x.replace(
-            'coudy', 'cloudy').replace('clouidy', 'cloudy').replace('party', 'partly') if not pd.isna(x) else x)
-        df['GameWeather_process'] = df['GameWeather_process'].apply(lambda x: x.replace(
-            'clear and sunny', 'sunny and clear') if not pd.isna(x) else x)
-        df['GameWeather_process'] = df['GameWeather_process'].apply(lambda x: x.replace(
-            'skies', '').replace('mostly', '').strip() if not pd.isna(x) else x)
-        df['GameWeather_dense'] = df['GameWeather_process'].apply(map_weather)
         add_new_feas.append('GameWeather_dense')
-
-        # Rusher
-        # train['IsRusher'] = (train['NflId'] == train['NflIdRusher'])
-        # train['IsRusher_ob'] = (train['NflId'] == train['NflIdRusher']).astype('object')
-        # temp = train[train['IsRusher']][['Team', 'PlayId']].rename(columns={'Team':'RusherTeam'})
-        # train = train.merge(temp, on = 'PlayId')
-        # train['IsRusherTeam'] = train['Team'] == train['RusherTeam']
-
-        # # dense -> categorical
-        # train['Quarter_ob'] = train['Quarter'].astype('object')
-        # train['Down_ob'] = train['Down'].astype('object')
-        # train['JerseyNumber_ob'] = train['JerseyNumber'].astype('object')
-        # train['YardLine_ob'] = train['YardLine'].astype('object')
-        # train['DefendersInTheBox_ob'] = train['DefendersInTheBox'].astype('object')
-        # train['Week_ob'] = train['Week'].astype('object')
-        # train['TimeDelta_ob'] = train['TimeDelta'].astype('object')
-
-        ## Orientation and Dir
-        df['Orientation_ob'] = df['Orientation'].apply(
-            lambda x: orientation_to_cat(x)).astype('object')
-        df['Dir_ob'] = df['Dir'].apply(
-            lambda x: orientation_to_cat(x)).astype('object')
-
-        df['Orientation_sin'] = df['Orientation'].apply(
-            lambda x: np.sin(x/360 * 2 * np.pi))
-        df['Orientation_cos'] = df['Orientation'].apply(
-            lambda x: np.cos(x/360 * 2 * np.pi))
-        df['Dir_sin'] = df['Dir'].apply(lambda x: np.sin(x/360 * 2 * np.pi))
-        df['Dir_cos'] = df['Dir'].apply(lambda x: np.cos(x/360 * 2 * np.pi))
         add_new_feas.append('Dir_sin')
         add_new_feas.append('Dir_cos')
 
@@ -479,7 +416,7 @@ class CRPSCallback(Callback):
             logs['CRPS_score_val'] = val_s
 
 
-def get_model(x_tr, y_tr, x_val, y_val, X, models):
+def get_model(x_tr, y_tr, x_val, y_val, X):
     inp = Input(shape=(x_tr.shape[1],))
     x = Dense(1024, input_dim=X.shape[1], activation='relu')(inp)
     x = Dropout(0.5)(x)
@@ -516,7 +453,7 @@ def get_model(x_tr, y_tr, x_val, y_val, X, models):
         x_val, y_val)), es, mc], epochs=100, batch_size=bsz, verbose=1)
     model.load_weights('best_model.h5')
 
-    y_pred = model.predict(x_val, models)
+    y_pred = model.predict(x_val)
     y_valid = y_val
     y_true = np.clip(np.cumsum(y_valid, axis=1), 0, 1)
     y_pred = np.clip(np.cumsum(y_pred, axis=1), 0, 1)
@@ -576,7 +513,7 @@ def main():
             print('-----------')
             tr_x, tr_y = X[tr_inds], y[tr_inds]
             val_x, val_y = X[val_inds], y[val_inds]
-            model, crps = get_model(tr_x, tr_y, val_x, val_y, X, models)
+            model, crps = get_model(tr_x, tr_y, val_x, val_y, X)
             models.append(model)
             print('the %d fold crps is %f' % ((k_fold+1), crps))
             crps_csv.append(crps)
